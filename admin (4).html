@@ -1,0 +1,94 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Swarm AI Admin Panel</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+<div class="container mt-5">
+    <h2 class="mb-4">Swarm AI Predictions</h2>
+
+    <div class="form-group">
+        <label for="sport-filter">Filter by Sport:</label>
+        <select id="sport-filter" class="form-control" onchange="filterTable()">
+            <option value="">All</option>
+            {% for sport in predictions|map(attribute='sport')|unique %}
+                <option value="{{ sport }}">{{ sport }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <button class="btn btn-success" onclick="exportFiltered()">Export Filtered</button>
+    </div>
+
+    <div id="chart" class="mb-4"></div>
+
+    {% if predictions %}
+    <table id="prediction-table" class="table table-bordered table-hover">
+        <thead class="thead-dark">
+            <tr>
+                <th>Sport</th>
+                <th>Game</th>
+                <th>Date</th>
+                <th>Human</th>
+                <th>Consensus</th>
+                <th>Accuracy</th>
+                <th>Confidence</th>
+                <th>Spread</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in predictions %}
+            <tr data-sport="{{ p.sport }}" style="background-color: {{ 'lightgreen' if p.confidence < 0.05 else ('#ffeeba' if p.confidence < 0.1 else '#f8d7da') }}">
+                <td>{{ p.sport }}</td>
+                <td>{{ p.game }}</td>
+                <td>{{ p.game_date }}</td>
+                <td>{{ p.human_prediction }}</td>
+                <td>{{ p.consensus }}</td>
+                <td>{{ p.accuracy }}%</td>
+                <td>{{ p.confidence }}</td>
+                <td>{{ p.spread }}</td>
+                <td>{{ p.total }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="alert alert-warning">No predictions found.</div>
+    {% endif %}
+</div>
+
+<script>
+function filterTable() {
+    const selected = document.getElementById("sport-filter").value;
+    document.querySelectorAll("#prediction-table tbody tr").forEach(row => {
+        row.style.display = (selected === "" || row.dataset.sport === selected) ? "" : "none";
+    });
+}
+
+function exportFiltered() {
+    const selected = document.getElementById("sport-filter").value;
+    const base = '/predictions/export';
+    const url = selected ? `${base}?sport=${selected}` : base;
+    window.location.href = url;
+}
+
+const games = {{ predictions|map(attribute='game')|list|tojson }};
+const consensus = {{ predictions|map(attribute='consensus')|list|tojson }};
+const confidence = {{ predictions|map(attribute='confidence')|list|tojson }};
+
+const trace1 = { x: games, y: consensus, name: 'Consensus', type: 'bar' };
+const trace2 = { x: games, y: confidence, name: 'Confidence', type: 'bar' };
+Plotly.newPlot('chart', [trace1, trace2], {
+    barmode: 'group',
+    title: 'Consensus vs Confidence',
+    xaxis: { title: 'Games' },
+    yaxis: { title: 'Score', range: [0, 1] }
+});
+</script>
+</body>
+</html>
