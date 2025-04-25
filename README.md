@@ -1,1 +1,104 @@
-# swarm
+from flask_apscheduler import APScheduler
+
+class Config:
+    SCHEDULER_API_ENABLED = True
+
+app.config.from_object(Config())
+scheduler = APScheduler()
+scheduler.init_app(app)
+scheduler.start()
+
+@app.route('/')
+def home():
+    return redirect(url_for('predictions_today'))
+
+@app.route('/predictions/export', methods=['GET'])
+def export_predictions():
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['ID', 'Sport', 'Game', 'Game Date', 'Human Prediction', 'Consensus', 'Accuracy', 'Confidence', 'Spread', 'Total', 'Result'])
+
+    todays_only = request.args.get('todays_only', 'false').lower() == 'true'
+    date_filter = request.args.get('date')
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    if date_filter:
+        predictions = Prediction.query.filter_by(game_date=date_filter).all()
+    elif todays_only:
+        predictions = Prediction.query.filter_by(game_date=today).all()
+    else:
+        predictions = Prediction.query.all()
+
+    for p in predictions:
+        writer.writerow([
+            p.id, p.sport, p.game, p.game_date, p.human_prediction,
+            p.consensus, p.accuracy, p.confidence, p.spread, p.total, p.result
+        ])
+
+    output.seek(0)
+    return Response(output, mimetype='text/csv', headers={"Content-Disposition": "attachment;filename=predictions.csv"})
+
+@app.route('/predictions/today', methods=['GET'])
+def predictions_today():
+    today = datetime.now().strftime("%Y-%m-%d")
+    fetch_odds_from_oddstrader()
+    predictions = Prediction.query.filter_by(game_date=today).all()
+    scrape_time = datetime.now().strftime("%H:%M:%S")
+    return render_template('predictions_by_date.html', predictions=predictions, query_date=today, scrape_time=scrape_time, show_chart=True)
+
+@app.route('/admin/today')
+def admin_today():
+    today = datetime.now().strftime("%Y-%m-%d")
+    predictions = Prediction.query.filter_by(game_date=today).all()
+    scrape_time = datetime.now().strftime("%H:%M:%S")
+    return render_template('predictions_by_date.html', predictions=predictions, query_date=today, scrape_time=scrape_time, show_chart=True)
+
+@app.route('/predictions/date/<date>', methods=['GET'])
+def predictions_by_date(date):
+    predictions = Prediction.query.filter_by(game_date=date).all()
+    scrape_time = datetime.now().strftime("%H:%M:%S")
+    return render_template('predictions_by_date.html', predictions=predictions, query_date=date, scrape_time=scrape_time, show_chart=True)
+
+@app.route('/email/today')
+@app.route('/email/send/<recipient_email>')
+@app.route('/email/preview')
+def simulate_email_today(recipient_email=None):
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    predictions = Prediction.query.filter_by(game_date=today).all()
+
+    subject = f"Swarm AI Daily Predictions - {today}"
+    body_lines = [f"<h2>Swarm AI Daily Predictions - {today}</h2>", "<ul>"]
+    for p in predictions:
+        body_lines.append(f"<li><strong>{p.sport}</strong>: {p.game} — Spread: {p.spread}, Total: {p.total}, Consensus: {p.consensus}, Confidence: {p.confidence}, Result: {p.result}</li>")
+    body_lines.append("</ul>")
+    body = "\n".join(body_lines)
+
+    sender_email = "youremail@gmail.com"
+    receiver_email = recipient_email if recipient_email else "freebanvar1987@gmail.com"
+    password = "your-app-password"
+
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = receiver_email
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'html'))
+
+    if recipient_email is None:
+        return Response(body, mimetype='text/html')
+
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(sender_email, password)
+            server.sendmail(sender_email, receiver_email, msg.as_string())
+        return f"✅ Email sent to {receiver_email}"
+    except Exception as e:
+        return f"❌ Failed to send email: {e}"
+
+@scheduler.task('cron', id='daily_email', hour=9, minute=0)
+def send_daily_email():
+    simulate_email_today("freebanvar1987@gmail.com")
+
