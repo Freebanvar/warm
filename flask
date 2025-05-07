@@ -8,6 +8,24 @@ app.config.from_object(Config()) scheduler = APScheduler() scheduler.init_app(ap
 
 @app.route('/predictions/export', methods=['GET']) def export_predictions(): output = io.StringIO() writer = csv.writer(output) writer.writerow(['ID', 'Sport', 'Game', 'Game Date', 'Human Prediction', 'Consensus', 'Accuracy', 'Confidence', 'Spread', 'Total', 'Result'])
 
+@app.route('/admin/devtools')
+def admin_devtools():
+    total = Prediction.query.count()
+    sports = [s[0] for s in db.session.query(Prediction.sport).distinct()]
+    latest = db.session.query(Prediction.game_date).order_by(Prediction.game_date.desc()).first()
+    latest_date = latest[0] if latest else 'N/A'
+
+    row_count = total
+    slowest_query_time = 128  # mock value in milliseconds
+
+    return render_template("admin_devtools.html",
+        total=total,
+        sports=sports,
+        latest_date=latest_date,
+        row_count=row_count,
+        slowest_query_time=slowest_query_time
+    )
+
 todays_only = request.args.get('todays_only', 'false').lower() == 'true'
 date_filter = request.args.get('date')
 today = datetime.now().strftime("%Y-%m-%d")
