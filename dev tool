@@ -1,0 +1,16 @@
+Admin Developer Tools
+Live Services
+/health — App Health Check
+PgHero Dashboard — Database Monitor
+Database Summary
+Total Predictions: {{ total }}
+Sports Tracked: {{ sports|join(', ') }}
+Most Recent Game Date: {{ latest_date }}
+Database Performance (Simulated)
+Table Name: prediction
+Row Count Estimate: {{ row_count }}
+Slowest Query Runtime (simulated): {{ slowest_query_time }} ms
+Quick Navigation
+Admin Today
+Advanced Query Tool
+Email Preview
